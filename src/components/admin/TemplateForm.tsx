@@ -36,6 +36,7 @@ const SAMPLE_FORM_DATA = {
   alamat: "Contoh alamat lengkap tempat acara akan ditampilkan di sini",
   ucapan: "Contoh kalimat ucapan undangan akan tampil di sini.",
   doa: "Contoh kalimat doa akan tampil di sini.",
+  namaKeluarga: "Keluarga Besar Bapak Contoh",
 };
 
 const TEXT_LAYER_LABELS: Record<keyof TemplateLayout["textLayers"], string> = {
@@ -46,6 +47,7 @@ const TEXT_LAYER_LABELS: Record<keyof TemplateLayout["textLayers"], string> = {
   alamat: "Alamat",
   ucapan: "Ucapan",
   doa: "Doa",
+  keluarga: "Kami yang Berbahagia (penutup)",
 };
 
 const PREVIEW_WIDTH = 320;

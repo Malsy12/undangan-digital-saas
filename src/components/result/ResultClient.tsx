@@ -69,6 +69,7 @@ export default function ResultClient() {
             nomorWa: store.nomorWa,
             ucapan: store.ucapan,
             doa: store.doa,
+            namaKeluarga: store.namaKeluarga,
           },
           fotoAnakDataUrl: store.fotoAnakDataUrl,
           logoDataUrl: store.logoDataUrl,

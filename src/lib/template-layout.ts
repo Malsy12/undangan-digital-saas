@@ -70,12 +70,26 @@ export interface TemplateLayout {
     alamat: TextLayer;
     ucapan: TextLayer;
     doa: TextLayer;
+    keluarga: TextLayer;
   };
 }
 
-const MARGIN_X = 80;
-const CONTENT_WIDTH = CANVAS_WIDTH - MARGIN_X * 2;
+export const MARGIN_X = 80;
+export const CONTENT_WIDTH = CANVAS_WIDTH - MARGIN_X * 2;
 const GAP = 20;
+
+// Fallback posisi untuk tema LAMA yang "text_positions"-nya di database belum
+// punya key "keluarga" (dibuat sebelum fitur ini ada) — lihat rowToTemplate
+// di lib/templates/mappers.ts. Ditaruh dekat bagian bawah kanvas karena
+// perannya sebagai penutup/signature, bukan bagian dari susunan teks utama.
+export const DEFAULT_KELUARGA_LAYER: TextLayer = {
+  x: MARGIN_X,
+  y: CANVAS_HEIGHT - 150,
+  width: CONTENT_WIDTH,
+  height: 60,
+  fontSize: 22,
+  align: "center",
+};
 
 /**
  * Layout default dipakai semua tema dummy sekarang (Tahap 1-5). Setiap tema
@@ -168,6 +182,18 @@ export function getDefaultLayout(photoAspectRatio: number): TemplateLayout {
     lineHeight: 1.4,
   };
 
+  // Penutup/signature ("Kami yang berbahagia, <nama keluarga>") — elemen
+  // paling akhir, ditumpuk setelah doa.
+  const keluarga: TextLayer = {
+    x: MARGIN_X,
+    y: stack(60),
+    width: CONTENT_WIDTH,
+    height: 60,
+    fontSize: 22,
+    align: "center",
+    lineHeight: 1.4,
+  };
+
   return {
     canvasWidth: CANVAS_WIDTH,
     canvasHeight: CANVAS_HEIGHT,
@@ -189,6 +215,7 @@ export function getDefaultLayout(photoAspectRatio: number): TemplateLayout {
       alamat,
       ucapan,
       doa,
+      keluarga,
     },
   };
 }

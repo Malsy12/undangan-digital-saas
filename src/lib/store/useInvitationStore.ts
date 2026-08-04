@@ -15,6 +15,8 @@ export interface InvitationFormState {
   nomorWa: string;
   ucapan: string;
   doa: string;
+  /** Opsional — nama keluarga besar/pengundang, baris penutup di undangan. */
+  namaKeluarga: string;
   /** Data URL (base64) hasil crop foto anak — sudah dipotong sesuai frame template. */
   fotoAnakDataUrl: string | null;
   /** Data URL (base64) logo opsional, tanpa proses crop. */
@@ -33,6 +35,7 @@ const initialState: InvitationFormState = {
   nomorWa: "",
   ucapan: "",
   doa: "",
+  namaKeluarga: "",
   fotoAnakDataUrl: null,
   logoDataUrl: null,
 };
@@ -69,6 +72,7 @@ export const useInvitationStore = create<InvitationStore>()(
         nomorWa: state.nomorWa,
         ucapan: state.ucapan,
         doa: state.doa,
+        namaKeluarga: state.namaKeluarga,
         fotoAnakDataUrl: state.fotoAnakDataUrl,
         logoDataUrl: state.logoDataUrl,
       }),

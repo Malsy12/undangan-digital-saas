@@ -22,6 +22,9 @@ export const invitationFormSchema = z.object({
     .regex(WA_REGEX, "Format nomor WA tidak valid, contoh: 081234567890"),
   ucapan: z.string().min(5, "Ucapan minimal 5 karakter").max(500),
   doa: z.string().min(5, "Doa minimal 5 karakter").max(500),
+  // Opsional — kalau diisi, dipakai sebagai baris penutup "Kami yang
+  // berbahagia, <namaKeluarga>" di gambar undangan.
+  namaKeluarga: z.string().max(150, "Maksimal 150 karakter").optional(),
 });
 
 export type InvitationFormValues = z.infer<typeof invitationFormSchema>;

@@ -17,6 +17,7 @@ export interface InvitationFormPreviewData {
   alamat: string;
   ucapan: string;
   doa: string;
+  namaKeluarga?: string;
 }
 
 interface InvitationCanvasStageProps {
@@ -233,6 +234,12 @@ export default function InvitationCanvasStage({
           layout.textLayers.doa,
           template.fontColor
         )}
+        {formData.namaKeluarga &&
+          renderTextLayer(
+            `Kami yang berbahagia,\n${formData.namaKeluarga}`,
+            layout.textLayers.keluarga,
+            template.fontColor
+          )}
       </Layer>
     </Stage>
   );

@@ -67,6 +67,7 @@ export interface RenderInvitationFormData {
   alamat: string;
   ucapan: string;
   doa: string;
+  namaKeluarga?: string;
 }
 
 export interface RenderInvitationInput {
@@ -310,6 +311,17 @@ export async function renderInvitationImage({
       ${textLayerToSvg(formData.alamat || "-", layout.textLayers.alamat, template.fontName, template.fontColor)}
       ${textLayerToSvg(formData.ucapan || "-", layout.textLayers.ucapan, template.fontName, template.fontColor)}
       ${textLayerToSvg(formData.doa || "-", layout.textLayers.doa, template.fontName, template.fontColor)}
+      ${
+        formData.namaKeluarga
+          ? textLayerToSvg(
+              "",
+              layout.textLayers.keluarga,
+              template.fontName,
+              template.fontColor,
+              ["Kami yang berbahagia,", formData.namaKeluarga]
+            )
+          : ""
+      }
     </svg>
   `;
   overlays.push({ input: Buffer.from(textSvg), left: 0, top: 0 });

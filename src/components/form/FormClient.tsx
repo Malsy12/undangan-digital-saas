@@ -49,6 +49,7 @@ export default function FormClient({
       nomorWa: initialSnapshot.nomorWa,
       ucapan: initialSnapshot.ucapan,
       doa: initialSnapshot.doa,
+      namaKeluarga: initialSnapshot.namaKeluarga,
     },
   });
 
@@ -74,6 +75,7 @@ export default function FormClient({
       nomorWa: saved.nomorWa,
       ucapan: saved.ucapan,
       doa: saved.doa,
+      namaKeluarga: saved.namaKeluarga,
     });
 
     // Foto/logo lama hanya dipakai ulang kalau temanya sama — rasio crop
@@ -275,6 +277,23 @@ export default function FormClient({
           </FieldWrapper>
 
           <LogoUploadField value={logoDataUrl} onChange={setLogoDataUrl} />
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Kami yang Berbahagia
+          </h2>
+
+          <FieldWrapper
+            label="Nama Keluarga / Pengundang (opsional)"
+            error={errors.namaKeluarga?.message}
+          >
+            <input
+              {...register("namaKeluarga")}
+              className={inputClass}
+              placeholder="Mis. Keluarga Besar Bapak Suto"
+            />
+          </FieldWrapper>
         </section>
 
         <button

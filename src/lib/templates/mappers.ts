@@ -1,4 +1,9 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT, type TemplateLayout } from "@/lib/template-layout";
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  DEFAULT_KELUARGA_LAYER,
+  type TemplateLayout,
+} from "@/lib/template-layout";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Template, TemplateFormInput } from "./types";
 
@@ -26,7 +31,16 @@ const DEFAULT_LOGO_PLACEHOLDER: TemplateLayout["logoPlaceholder"] = {
 };
 
 export function rowToTemplate(row: TemplateRow): Template {
-  const textLayers = row.text_positions as unknown as TemplateLayout["textLayers"];
+  // "keluarga" ditambahkan belakangan — tema yang dibuat sebelum fitur ini
+  // ada belum punya key ini di JSON "text_positions", jadi diisi fallback
+  // supaya tidak undefined saat dipakai preview/render.
+  const rawTextLayers = row.text_positions as unknown as Partial<
+    TemplateLayout["textLayers"]
+  >;
+  const textLayers: TemplateLayout["textLayers"] = {
+    ...rawTextLayers,
+    keluarga: rawTextLayers.keluarga ?? DEFAULT_KELUARGA_LAYER,
+  } as TemplateLayout["textLayers"];
   const photoPlaceholderColumn =
     row.photo_placeholder as unknown as PhotoPlaceholderColumn;
   const { logo, ...photoPlaceholder } = photoPlaceholderColumn;

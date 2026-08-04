@@ -124,6 +124,7 @@ export default function PreviewClient() {
               alamat: store.alamat,
               ucapan: store.ucapan,
               doa: store.doa,
+              namaKeluarga: store.namaKeluarga,
             }}
             fotoAnakDataUrl={store.fotoAnakDataUrl!}
             logoDataUrl={store.logoDataUrl}
