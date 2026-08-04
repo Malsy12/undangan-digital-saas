@@ -1,6 +1,8 @@
 import type { TemplateLayout } from "@/lib/template-layout";
 
-export type TemplateCategory = "Aqiqah" | "Kelahiran";
+// Dulu union tetap ("Aqiqah" | "Kelahiran"), sekarang teks bebas — admin boleh
+// isi kategori apa saja untuk tema baru (mis. "Ulang Tahun", "Khitanan").
+export type TemplateCategory = string;
 
 /**
  * Bentuk template yang dipakai di seluruh aplikasi (landing, form, preview,

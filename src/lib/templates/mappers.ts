@@ -1,6 +1,6 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, type TemplateLayout } from "@/lib/template-layout";
 import type { Database } from "@/lib/supabase/database.types";
-import type { Template, TemplateCategory, TemplateFormInput } from "./types";
+import type { Template, TemplateFormInput } from "./types";
 
 type TemplateRow = Database["public"]["Tables"]["templates"]["Row"];
 type TemplateInsertRow = Database["public"]["Tables"]["templates"]["Insert"];
@@ -33,7 +33,7 @@ export function rowToTemplate(row: TemplateRow): Template {
   return {
     id: row.id,
     name: row.name,
-    category: (row.category as TemplateCategory) ?? "Aqiqah",
+    category: row.category ?? "Aqiqah",
     isActive: row.is_active,
     thumbnailUrl: row.thumbnail_url,
     backgroundUrl: row.background_url,

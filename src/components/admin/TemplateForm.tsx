@@ -7,7 +7,7 @@ import {
   type TemplateLayout,
   type TextLayer,
 } from "@/lib/template-layout";
-import type { Template, TemplateCategory } from "@/lib/templates/types";
+import type { Template } from "@/lib/templates/types";
 import { saveTemplateAction } from "@/app/admin/templates/actions";
 
 const InvitationCanvasStage = dynamic(
@@ -64,9 +64,7 @@ export default function TemplateForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [name, setName] = useState(initialTemplate?.name ?? "");
-  const [category, setCategory] = useState<TemplateCategory>(
-    initialTemplate?.category ?? "Aqiqah"
-  );
+  const [category, setCategory] = useState(initialTemplate?.category ?? "");
   const [isActive, setIsActive] = useState(initialTemplate?.isActive ?? true);
   const [dominantColor, setDominantColor] = useState(
     initialTemplate?.dominantColor ?? "#ec4899"
@@ -163,6 +161,23 @@ export default function TemplateForm({
     }
   }
 
+  // Menghapus asset yang sudah ada TANPA harus lewat Supabase Storage
+  // manual — file lama akan ikut dihapus dari bucket saat "Simpan Tema"
+  // diklik (lihat saveTemplateAction / uploadIfPresent di actions.ts).
+  function handleRemoveAsset(kind: "thumbnail" | "background" | "overlay") {
+    setErrorMessage(null);
+    if (kind === "thumbnail") {
+      setThumbnailFile(null);
+      setThumbnailPreview(null);
+    } else if (kind === "background") {
+      setBackgroundFile(null);
+      setBackgroundPreview(null);
+    } else {
+      setOverlayFile(null);
+      setOverlayPreview(null);
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMessage(null);
@@ -183,9 +198,16 @@ export default function TemplateForm({
     if (thumbnailFile) fd.append("thumbnail", thumbnailFile);
     if (backgroundFile) fd.append("background", backgroundFile);
     if (overlayFile) fd.append("overlay", overlayFile);
-    fd.append("existingThumbnailUrl", initialTemplate?.thumbnailUrl ?? "");
-    fd.append("existingBackgroundUrl", initialTemplate?.backgroundUrl ?? "");
-    fd.append("existingOverlayUrl", initialTemplate?.overlayUrl ?? "");
+    // existingXUrl dibaca dari state preview saat ini (bukan nilai awal tetap)
+    // supaya kalau admin klik "Hapus" (preview jadi null), URL lama benar-benar
+    // tidak ikut disimpan lagi. originalXUrl dikirim terpisah cuma untuk
+    // referensi server menghapus file lama di Supabase Storage bila diganti/dihapus.
+    fd.append("existingThumbnailUrl", thumbnailFile ? "" : (thumbnailPreview ?? ""));
+    fd.append("existingBackgroundUrl", backgroundFile ? "" : (backgroundPreview ?? ""));
+    fd.append("existingOverlayUrl", overlayFile ? "" : (overlayPreview ?? ""));
+    fd.append("originalThumbnailUrl", initialTemplate?.thumbnailUrl ?? "");
+    fd.append("originalBackgroundUrl", initialTemplate?.backgroundUrl ?? "");
+    fd.append("originalOverlayUrl", initialTemplate?.overlayUrl ?? "");
 
     startTransition(async () => {
       try {
@@ -235,14 +257,18 @@ export default function TemplateForm({
             </div>
             <div>
               <label className={labelClass}>Kategori</label>
-              <select
+              <input
+                required
+                list="kategori-options"
                 value={category}
-                onChange={(e) => setCategory(e.target.value as TemplateCategory)}
+                onChange={(e) => setCategory(e.target.value)}
                 className={inputClass}
-              >
-                <option value="Aqiqah">Aqiqah</option>
-                <option value="Kelahiran">Kelahiran</option>
-              </select>
+                placeholder="Mis. Aqiqah, Kelahiran, Khitanan, ..."
+              />
+              <datalist id="kategori-options">
+                <option value="Aqiqah" />
+                <option value="Kelahiran" />
+              </datalist>
             </div>
             <div>
               <label className={labelClass}>Warna Dominan</label>
@@ -339,6 +365,15 @@ export default function TemplateForm({
                   }
                   className="mt-2 w-full text-xs"
                 />
+                {previewUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAsset(kind)}
+                    className="mt-1 text-xs text-red-500 hover:text-red-700 hover:underline"
+                  >
+                    Hapus
+                  </button>
+                )}
               </div>
             ))}
           </div>

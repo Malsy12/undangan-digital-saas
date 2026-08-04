@@ -62,6 +62,28 @@ async function uploadIfPresent(
   return typeof existing === "string" && existing.length > 0 ? existing : null;
 }
 
+// Dipanggil setelah upload baru selesai, untuk membuang file LAMA di bucket
+// yang sudah tidak dipakai lagi (diganti file baru, atau dihapus admin lewat
+// tombol "Hapus" — lihat TemplateForm) supaya tidak ada file nyangkut yang
+// sebelumnya cuma bisa dibersihkan manual lewat dashboard Supabase.
+async function cleanupReplacedAsset(
+  admin: ReturnType<typeof createAdminClient>,
+  originalUrl: string | null,
+  finalUrl: string | null
+) {
+  if (!originalUrl || originalUrl === finalUrl) return;
+
+  const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  const idx = originalUrl.indexOf(marker);
+  if (idx === -1) return;
+  const path = originalUrl.slice(idx + marker.length);
+  if (!path) return;
+
+  // Best-effort: kalau file lama sudah tidak ada / gagal dihapus, jangan
+  // gagalkan keseluruhan penyimpanan tema karena ini.
+  await admin.storage.from(STORAGE_BUCKET).remove([path]).catch(() => {});
+}
+
 /**
  * Satu Server Action untuk create & update — dibedakan lewat parameter "id".
  * FormData berisi field JSON di key "payload" + (opsional) file thumbnail/
@@ -77,10 +99,22 @@ export async function saveTemplateAction(id: string | null, formData: FormData) 
     "thumbnailUrl" | "backgroundUrl" | "overlayUrl"
   >;
 
+  const admin = createAdminClient();
+
   const [thumbnailUrl, backgroundUrl, overlayUrl] = await Promise.all([
     uploadIfPresent(formData, "thumbnail", "existingThumbnailUrl"),
     uploadIfPresent(formData, "background", "existingBackgroundUrl"),
     uploadIfPresent(formData, "overlay", "existingOverlayUrl"),
+  ]);
+
+  const getOriginal = (key: string) => {
+    const value = formData.get(key);
+    return typeof value === "string" && value.length > 0 ? value : null;
+  };
+  await Promise.all([
+    cleanupReplacedAsset(admin, getOriginal("originalThumbnailUrl"), thumbnailUrl),
+    cleanupReplacedAsset(admin, getOriginal("originalBackgroundUrl"), backgroundUrl),
+    cleanupReplacedAsset(admin, getOriginal("originalOverlayUrl"), overlayUrl),
   ]);
 
   const input: TemplateFormInput = {
@@ -90,7 +124,6 @@ export async function saveTemplateAction(id: string | null, formData: FormData) 
     overlayUrl,
   };
 
-  const admin = createAdminClient();
   if (id) {
     await updateTemplate(admin, id, input);
   } else {
