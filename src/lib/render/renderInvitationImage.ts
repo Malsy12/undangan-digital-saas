@@ -2,7 +2,13 @@ import "server-only";
 import { readFileSync } from "fs";
 import { join } from "path";
 import sharp, { type OverlayOptions, type Sharp } from "sharp";
-import { CANVAS_WIDTH, CANVAS_HEIGHT, type TextLayer } from "@/lib/template-layout";
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  type TextLayer,
+  type PhotoPlaceholder,
+  type PhotoShadow,
+} from "@/lib/template-layout";
 import type { Template } from "@/lib/templates/types";
 import { wrapText } from "./wrapText";
 
@@ -88,6 +94,48 @@ function escapeXml(text: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+function hexToRgb01(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  const full =
+    clean.length === 3
+      ? clean.split("").map((c) => c + c).join("")
+      : clean.padEnd(6, "0");
+  const value = parseInt(full, 16);
+  return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+}
+
+/**
+ * Bayangan frame foto dirender sebagai SVG terpisah (feGaussianBlur + feOffset +
+ * feColorMatrix — bukan feDropShadow supaya kompatibel lebih luas di librsvg),
+ * dikomposit SEBELUM foto supaya cuma bagian yang meluber di luar frame yang
+ * kelihatan (bagian tengahnya ketutup total oleh foto di atasnya).
+ */
+function buildPhotoShadowSvg(placeholder: PhotoPlaceholder, shadow: PhotoShadow): string {
+  const { x, y, width, height, shape } = placeholder;
+  const shapeEl =
+    shape === "circle"
+      ? `<circle cx="${x + width / 2}" cy="${y + height / 2}" r="${width / 2}" fill="#000"/>`
+      : `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="20" ry="20" fill="#000"/>`;
+  const [r, g, b] = hexToRgb01(shadow.color);
+
+  return `
+    <svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="photoShadow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="${shadow.blur / 2}" result="blur"/>
+          <feOffset in="blur" dx="${shadow.offsetX}" dy="${shadow.offsetY}" result="offsetBlur"/>
+          <feColorMatrix in="offsetBlur" type="matrix" values="
+            0 0 0 0 ${r}
+            0 0 0 0 ${g}
+            0 0 0 0 ${b}
+            0 0 0 ${shadow.opacity} 0"/>
+        </filter>
+      </defs>
+      <g filter="url(#photoShadow)">${shapeEl}</g>
+    </svg>
+  `;
 }
 
 async function fetchImageBuffer(url: string): Promise<Buffer> {
@@ -209,9 +257,16 @@ export async function renderInvitationImage({
     .png()
     .toBuffer();
 
-  const overlays: OverlayOptions[] = [
-    { input: maskedPhoto, left: Math.round(photoX), top: Math.round(photoY) },
-  ];
+  const overlays: OverlayOptions[] = [];
+  if (layout.photoPlaceholder.shadow?.enabled) {
+    const shadowSvg = buildPhotoShadowSvg(layout.photoPlaceholder, layout.photoPlaceholder.shadow);
+    overlays.push({ input: Buffer.from(shadowSvg), left: 0, top: 0 });
+  }
+  overlays.push({
+    input: maskedPhoto,
+    left: Math.round(photoX),
+    top: Math.round(photoY),
+  });
 
   // 3) Overlay dekoratif (bingkai/ornamen) opsional, di atas foto sebelum teks.
   if (template.overlayUrl) {

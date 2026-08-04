@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Stage, Layer, Rect, Text, Group, Image as KonvaImage } from "react-konva";
+import { Stage, Layer, Rect, Circle, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import { useCanvasImage } from "@/lib/hooks/useCanvasImage";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, type TextLayer } from "@/lib/template-layout";
@@ -112,6 +112,38 @@ export default function InvitationCanvasStage({
           layout.textLayers.kategori,
           "#ffffff"
         )}
+
+        {/* Shadow frame foto: shape solid TANPA clip, digambar di bawah foto —
+            bagian tengahnya nanti tertutup total oleh foto, yang kelihatan cuma
+            bayangan yang meluber di luar frame. */}
+        {layout.photoPlaceholder.shadow?.enabled &&
+          (layout.photoPlaceholder.shape === "circle" ? (
+            <Circle
+              x={layout.photoPlaceholder.x + layout.photoPlaceholder.width / 2}
+              y={layout.photoPlaceholder.y + layout.photoPlaceholder.height / 2}
+              radius={layout.photoPlaceholder.width / 2}
+              fill="#ffffff"
+              shadowColor={layout.photoPlaceholder.shadow.color}
+              shadowBlur={layout.photoPlaceholder.shadow.blur}
+              shadowOffsetX={layout.photoPlaceholder.shadow.offsetX}
+              shadowOffsetY={layout.photoPlaceholder.shadow.offsetY}
+              shadowOpacity={layout.photoPlaceholder.shadow.opacity}
+            />
+          ) : (
+            <Rect
+              x={layout.photoPlaceholder.x}
+              y={layout.photoPlaceholder.y}
+              width={layout.photoPlaceholder.width}
+              height={layout.photoPlaceholder.height}
+              cornerRadius={20}
+              fill="#ffffff"
+              shadowColor={layout.photoPlaceholder.shadow.color}
+              shadowBlur={layout.photoPlaceholder.shadow.blur}
+              shadowOffsetX={layout.photoPlaceholder.shadow.offsetX}
+              shadowOffsetY={layout.photoPlaceholder.shadow.offsetY}
+              shadowOpacity={layout.photoPlaceholder.shadow.opacity}
+            />
+          ))}
 
         {/* Frame foto: di-clip sesuai bentuk (lingkaran/kotak) supaya foto tidak pernah keluar frame. */}
         <Group

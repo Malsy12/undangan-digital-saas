@@ -4,8 +4,10 @@ import { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import {
   getDefaultLayout,
+  DEFAULT_PHOTO_SHADOW,
   type TemplateLayout,
   type TextLayer,
+  type PhotoShadow,
 } from "@/lib/template-layout";
 import type { Template } from "@/lib/templates/types";
 import { saveTemplateAction } from "@/app/admin/templates/actions";
@@ -106,6 +108,32 @@ export default function TemplateForm({
     setLayout((prev) => ({
       ...prev,
       photoPlaceholder: { ...prev.photoPlaceholder, shape },
+    }));
+  }
+
+  function toggleShadow(enabled: boolean) {
+    setLayout((prev) => ({
+      ...prev,
+      photoPlaceholder: {
+        ...prev.photoPlaceholder,
+        shadow: { ...(prev.photoPlaceholder.shadow ?? DEFAULT_PHOTO_SHADOW), enabled },
+      },
+    }));
+  }
+
+  function updateShadowField(
+    field: Exclude<keyof PhotoShadow, "enabled">,
+    value: string | number
+  ) {
+    setLayout((prev) => ({
+      ...prev,
+      photoPlaceholder: {
+        ...prev.photoPlaceholder,
+        shadow: {
+          ...(prev.photoPlaceholder.shadow ?? DEFAULT_PHOTO_SHADOW),
+          [field]: value,
+        },
+      },
     }));
   }
 
@@ -446,6 +474,72 @@ export default function TemplateForm({
             {(layout.photoPlaceholder.width / layout.photoPlaceholder.height).toFixed(2)}
             ).
           </p>
+
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={layout.photoPlaceholder.shadow?.enabled ?? false}
+                onChange={(e) => toggleShadow(e.target.checked)}
+                className="accent-brand-600"
+              />
+              Shadow di luar frame foto
+            </label>
+
+            {layout.photoPlaceholder.shadow?.enabled && (
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+                <div>
+                  <label className={labelClass}>Warna</label>
+                  <input
+                    type="color"
+                    value={layout.photoPlaceholder.shadow.color}
+                    onChange={(e) => updateShadowField("color", e.target.value)}
+                    className="h-9 w-full rounded border border-gray-300"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Blur</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={layout.photoPlaceholder.shadow.blur}
+                    onChange={(e) => updateShadowField("blur", Number(e.target.value))}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Offset X</label>
+                  <input
+                    type="number"
+                    value={layout.photoPlaceholder.shadow.offsetX}
+                    onChange={(e) => updateShadowField("offsetX", Number(e.target.value))}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Offset Y</label>
+                  <input
+                    type="number"
+                    value={layout.photoPlaceholder.shadow.offsetY}
+                    onChange={(e) => updateShadowField("offsetY", Number(e.target.value))}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Opacity</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={layout.photoPlaceholder.shadow.opacity}
+                    onChange={(e) => updateShadowField("opacity", Number(e.target.value))}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div>

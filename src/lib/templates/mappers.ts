@@ -15,6 +15,7 @@ interface PhotoPlaceholderColumn {
   width: number;
   height: number;
   shape: "circle" | "rect";
+  shadow?: TemplateLayout["photoPlaceholder"]["shadow"];
   logo?: TemplateLayout["logoPlaceholder"];
 }
 

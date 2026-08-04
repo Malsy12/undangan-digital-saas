@@ -22,13 +22,34 @@ export interface TextLayer {
   lineHeight?: number;
 }
 
+export interface PhotoShadow {
+  enabled: boolean;
+  color: string;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+  /** 0-1 */
+  opacity: number;
+}
+
 export interface PhotoPlaceholder {
   x: number;
   y: number;
   width: number;
   height: number;
   shape: "circle" | "rect";
+  /** Opsional — kalau tidak diisi berarti tanpa shadow (perilaku lama). */
+  shadow?: PhotoShadow;
 }
+
+export const DEFAULT_PHOTO_SHADOW: PhotoShadow = {
+  enabled: true,
+  color: "#000000",
+  blur: 24,
+  offsetX: 0,
+  offsetY: 8,
+  opacity: 0.35,
+};
 
 export interface LogoPlaceholder {
   x: number;
