@@ -5,6 +5,7 @@ import { Stage, Layer, Rect, Circle, Text, Group, Image as KonvaImage } from "re
 import type Konva from "konva";
 import { useCanvasImage } from "@/lib/hooks/useCanvasImage";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, type TextLayer } from "@/lib/template-layout";
+import { resolveFontName } from "@/lib/fonts";
 import type { Template } from "@/lib/templates/types";
 
 export interface InvitationFormPreviewData {
@@ -74,7 +75,7 @@ export default function InvitationCanvasStage({
         text={text}
         {...layer}
         fill={layer.color ?? defaultFill}
-        fontFamily={template.fontName}
+        fontFamily={resolveFontName(template.fontName)}
         wrap="word"
         ellipsis
       />

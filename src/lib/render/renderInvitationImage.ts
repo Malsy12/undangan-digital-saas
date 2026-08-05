@@ -9,52 +9,50 @@ import {
   type PhotoPlaceholder,
   type PhotoShadow,
 } from "@/lib/template-layout";
+import { SUPPORTED_FONTS, resolveFontName } from "@/lib/fonts";
 import type { Template } from "@/lib/templates/types";
 import { wrapText } from "./wrapText";
 
 // Server serverless (Vercel dkk) TIDAK punya font sistem terinstall (beda
 // dengan komputer dev yang punya Arial/dsb) — tanpa font disematkan langsung,
 // semua teks di gambar hasil generate akan tampil sebagai kotak kosong
-// ("tofu"). Font di-baca sekali lalu di-cache di memori (proses ini bisa
-// dipakai ulang antar request selama instance server masih "hangat").
-let cachedFontFaceStyle: string | null = null;
+// ("tofu"). Cuma font yang benar-benar dipakai template yang disematkan
+// (bukan semua font pilihan sekaligus), hasilnya di-cache per nama font
+// supaya request berikutnya dengan font sama tidak baca file ulang.
+const fontFaceStyleCache = new Map<string, string>();
 
-function loadFontFaceStyle(): string {
-  if (cachedFontFaceStyle) return cachedFontFaceStyle;
+function loadFontFaceStyle(requestedFontName: string): string {
+  const fontName = resolveFontName(requestedFontName);
+  const cached = fontFaceStyleCache.get(fontName);
+  if (cached) return cached;
 
+  const { files } = SUPPORTED_FONTS[fontName];
   const fontsDir = join(process.cwd(), "src/lib/render/fonts");
   const toBase64 = (filename: string) =>
     readFileSync(join(fontsDir, filename)).toString("base64");
 
-  cachedFontFaceStyle = `
-    <style>
-      @font-face {
-        font-family: 'Poppins';
-        font-weight: 400;
-        font-style: normal;
-        src: url(data:font/woff;base64,${toBase64("Poppins-Regular.woff")}) format('woff');
-      }
-      @font-face {
-        font-family: 'Poppins';
-        font-weight: 700;
-        font-style: normal;
-        src: url(data:font/woff;base64,${toBase64("Poppins-Bold.woff")}) format('woff');
-      }
-      @font-face {
-        font-family: 'Poppins';
-        font-weight: 400;
-        font-style: italic;
-        src: url(data:font/woff;base64,${toBase64("Poppins-Italic.woff")}) format('woff');
-      }
-      @font-face {
-        font-family: 'Poppins';
-        font-weight: 700;
-        font-style: italic;
-        src: url(data:font/woff;base64,${toBase64("Poppins-BoldItalic.woff")}) format('woff');
-      }
-    </style>
-  `;
-  return cachedFontFaceStyle;
+  const faces = [
+    `@font-face { font-family: '${fontName}'; font-weight: 400; font-style: normal; src: url(data:font/woff;base64,${toBase64(files.normal)}) format('woff'); }`,
+  ];
+  if (files.bold) {
+    faces.push(
+      `@font-face { font-family: '${fontName}'; font-weight: 700; font-style: normal; src: url(data:font/woff;base64,${toBase64(files.bold)}) format('woff'); }`
+    );
+  }
+  if (files.italic) {
+    faces.push(
+      `@font-face { font-family: '${fontName}'; font-weight: 400; font-style: italic; src: url(data:font/woff;base64,${toBase64(files.italic)}) format('woff'); }`
+    );
+  }
+  if (files.boldItalic) {
+    faces.push(
+      `@font-face { font-family: '${fontName}'; font-weight: 700; font-style: italic; src: url(data:font/woff;base64,${toBase64(files.boldItalic)}) format('woff'); }`
+    );
+  }
+
+  const style = `<style>${faces.join("\n")}</style>`;
+  fontFaceStyleCache.set(fontName, style);
+  return style;
 }
 
 export interface RenderInvitationFormData {
@@ -188,11 +186,11 @@ function textLayerToSvg(
     )
     .join("");
 
-  // "Poppins" ditaruh paling depan karena itu satu-satunya font yang
-  // disematkan langsung (lihat loadFontFaceStyle) — dijamin selalu tersedia
-  // di server manapun. Nama font dari template dicoba juga sebagai referensi
-  // kalau suatu saat font kustom lain turut disematkan.
-  return `<text font-family="Poppins, ${escapeXml(fontFamily)}, Arial, Helvetica, sans-serif" font-size="${layer.fontSize}" font-weight="${fontWeight}" font-style="${fontStyleAttr}" fill="${fill}" text-anchor="${anchor}">${tspans}</text>`;
+  // resolveFontName menjamin nama yang dipakai di sini SAMA dengan nama yang
+  // disematkan loadFontFaceStyle — kalau beda, browser/librsvg tidak akan
+  // ketemu face-nya dan render text jadi tofu lagi (lihat riwayat bug font).
+  const resolvedFontFamily = resolveFontName(fontFamily);
+  return `<text font-family="${escapeXml(resolvedFontFamily)}, Arial, Helvetica, sans-serif" font-size="${layer.fontSize}" font-weight="${fontWeight}" font-style="${fontStyleAttr}" fill="${fill}" text-anchor="${anchor}">${tspans}</text>`;
 }
 
 /**
@@ -209,7 +207,7 @@ export async function renderInvitationImage({
 }: RenderInvitationInput): Promise<Buffer> {
   const layout = template.layout;
   const sebutan = formData.jenisKelamin === "Laki-laki" ? "Putra" : "Putri";
-  const fontFaceStyle = loadFontFaceStyle();
+  const fontFaceStyle = loadFontFaceStyle(template.fontName);
 
   // 1) Background: pakai background_url asli kalau sudah diupload admin,
   // else solid dominantColor. Label kategori dirasterisasi jadi satu lapisan.

@@ -11,6 +11,7 @@ import {
 } from "@/lib/template-layout";
 import type { Template } from "@/lib/templates/types";
 import { saveTemplateAction } from "@/app/admin/templates/actions";
+import { SUPPORTED_FONTS, SUPPORTED_FONT_NAMES, resolveFontName } from "@/lib/fonts";
 
 const InvitationCanvasStage = dynamic(
   () => import("@/components/preview/InvitationCanvasStage"),
@@ -73,7 +74,9 @@ export default function TemplateForm({
   const [dominantColor, setDominantColor] = useState(
     initialTemplate?.dominantColor ?? "#ec4899"
   );
-  const [fontName, setFontName] = useState(initialTemplate?.fontName ?? "Poppins");
+  const [fontName, setFontName] = useState(
+    resolveFontName(initialTemplate?.fontName ?? "Poppins")
+  );
   const [fontColor, setFontColor] = useState(
     initialTemplate?.fontColor ?? "#1f2937"
   );
@@ -317,12 +320,18 @@ export default function TemplateForm({
               </div>
             </div>
             <div>
-              <label className={labelClass}>Nama Font</label>
-              <input
+              <label className={labelClass}>Font</label>
+              <select
                 value={fontName}
                 onChange={(e) => setFontName(e.target.value)}
                 className={inputClass}
-              />
+              >
+                {SUPPORTED_FONT_NAMES.map((name) => (
+                  <option key={name} value={name}>
+                    {SUPPORTED_FONTS[name].label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className={labelClass}>Warna Font</label>
