@@ -19,6 +19,15 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  if (request.nextUrl.searchParams.get("debug") === "4") {
+    return NextResponse.json({
+      sharpVersions: sharp.versions,
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+    });
+  }
+
   if (request.nextUrl.searchParams.get("debug") === "3") {
     // Replika PERSIS pola kode lama yang confirmed bekerja di production
     // (readFileSync dengan filename string literal langsung di call site,
