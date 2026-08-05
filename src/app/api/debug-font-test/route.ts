@@ -5,11 +5,47 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getDefaultLayout } from "@/lib/template-layout";
 import { renderInvitationImage } from "@/lib/render/renderInvitationImage";
 import { SUPPORTED_FONTS } from "@/lib/fonts";
+import { debugBuildFontFaceStyle } from "@/lib/render/renderInvitationImage";
 import type { Template } from "@/lib/templates/types";
 
 // Route debug sementara — dihapus setelah verifikasi pilihan font selesai.
 export async function GET(request: NextRequest) {
   const fontName = request.nextUrl.searchParams.get("font") ?? "Poppins";
+
+  if (request.nextUrl.searchParams.get("debug") === "2") {
+    const fontFaceStyle = debugBuildFontFaceStyle(fontName);
+    return new NextResponse(fontFaceStyle, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  if (request.nextUrl.searchParams.get("debug") === "3") {
+    // Replika PERSIS pola kode lama yang confirmed bekerja di production
+    // (readFileSync dengan filename string literal langsung di call site,
+    // bukan hasil lookup objek runtime) — untuk isolasi apakah masalahnya
+    // benar-benar soal literal-vs-dinamis, atau ada sebab lain.
+    const fontsDir = join(process.cwd(), "src/lib/render/fonts");
+    const toBase64 = (filename: string) =>
+      readFileSync(join(fontsDir, filename)).toString("base64");
+    const style = `
+      <style>
+        @font-face { font-family: 'Poppins'; font-weight: 400; font-style: normal; src: url(data:font/woff;base64,${toBase64("Poppins-Regular.woff")}) format('woff'); }
+        @font-face { font-family: 'Poppins'; font-weight: 700; font-style: normal; src: url(data:font/woff;base64,${toBase64("Poppins-Bold.woff")}) format('woff'); }
+      </style>
+    `;
+    const svg = `
+      <svg width="600" height="200" xmlns="http://www.w3.org/2000/svg">
+        <defs>${style}</defs>
+        <rect width="600" height="200" fill="#ffffff"/>
+        <text x="20" y="100" font-family="Poppins, Arial, Helvetica, sans-serif" font-size="40" fill="#000000">Yasmine Test</text>
+        <text x="20" y="160" font-family="Poppins, Arial, Helvetica, sans-serif" font-size="30" font-weight="bold" fill="#000000">Bold Test</text>
+      </svg>
+    `;
+    const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: { "Content-Type": "image/png" },
+    });
+  }
 
   if (request.nextUrl.searchParams.get("debug") === "1") {
     const fontsDir = join(process.cwd(), "src/lib/render/fonts");

@@ -55,6 +55,13 @@ function loadFontFaceStyle(requestedFontName: string): string {
   return style;
 }
 
+// Dipakai endpoint debug sementara (api/debug-font-test) untuk lihat SVG
+// mentah yang benar-benar dikirim ke Sharp, tanpa perlu menebak dari hasil
+// raster-nya. Dihapus bareng endpoint debug setelah investigasi selesai.
+export function debugBuildFontFaceStyle(fontName: string): string {
+  return loadFontFaceStyle(fontName);
+}
+
 export interface RenderInvitationFormData {
   namaAnak: string;
   jenisKelamin: "Laki-laki" | "Perempuan" | "";
