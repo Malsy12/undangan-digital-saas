@@ -1,12 +1,46 @@
 import sharp from "sharp";
+import { readFileSync, existsSync, readdirSync } from "fs";
+import { join } from "path";
 import { NextResponse, type NextRequest } from "next/server";
 import { getDefaultLayout } from "@/lib/template-layout";
 import { renderInvitationImage } from "@/lib/render/renderInvitationImage";
+import { SUPPORTED_FONTS } from "@/lib/fonts";
 import type { Template } from "@/lib/templates/types";
 
 // Route debug sementara — dihapus setelah verifikasi pilihan font selesai.
 export async function GET(request: NextRequest) {
   const fontName = request.nextUrl.searchParams.get("font") ?? "Poppins";
+
+  if (request.nextUrl.searchParams.get("debug") === "1") {
+    const fontsDir = join(process.cwd(), "src/lib/render/fonts");
+    const dirExists = existsSync(fontsDir);
+    let dirListing: string[] = [];
+    try {
+      dirListing = dirExists ? readdirSync(fontsDir) : [];
+    } catch (e) {
+      dirListing = [`ERROR: ${e instanceof Error ? e.message : String(e)}`];
+    }
+    const fileChecks: Record<string, string> = {};
+    for (const [name, def] of Object.entries(SUPPORTED_FONTS)) {
+      for (const file of Object.values(def.files)) {
+        if (!file) continue;
+        const p = join(fontsDir, file);
+        try {
+          const buf = readFileSync(p);
+          fileChecks[`${name}/${file}`] = `OK ${buf.length} bytes`;
+        } catch (e) {
+          fileChecks[`${name}/${file}`] = `FAIL ${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
+    }
+    return NextResponse.json({
+      cwd: process.cwd(),
+      fontsDir,
+      dirExists,
+      dirListing,
+      fileChecks,
+    });
+  }
 
   const template: Template = {
     id: "debug",
