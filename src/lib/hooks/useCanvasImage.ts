@@ -19,6 +19,16 @@ export function useCanvasImage(url: string | null | undefined): HTMLImageElement
     }
 
     const img = new Image();
+    // Wajib di-set SEBELUM src, dan HANYA untuk URL lintas-origin (http/https).
+    // Data URL (base64, dipakai untuk foto anak yang diupload user) tidak
+    // butuh ini dan browser akan mengabaikannya untuk data: URL.
+    // Tanpa ini, gambar background/overlay tema (dimuat dari storage lain,
+    // domain berbeda) membuat <canvas> "tainted" sehingga stage.toDataURL()
+    // di PreviewClient (fitur download JPEG langsung dari preview) gagal
+    // total dengan error "Tainted canvases may not be exported".
+    if (/^https?:\/\//i.test(url)) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => setImage(img);
     img.onerror = () => setImage(null);
     img.src = url;
