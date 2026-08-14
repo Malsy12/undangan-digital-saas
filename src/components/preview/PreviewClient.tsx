@@ -32,8 +32,8 @@ export default function PreviewClient() {
   const [templateLoading, setTemplateLoading] = useState(true);
   const stageRef = useRef<Konva.Stage>(null);
 
-  // Komponen ini client-only (data dari localStorage), jadi tema diambil
-  // lewat API route publik /api/templates/[id], bukan query Supabase langsung.
+  const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
+
   useEffect(() => {
     if (!hasHydrated || !store.templateId) {
       setTemplateLoading(false);
@@ -46,18 +46,11 @@ export default function PreviewClient() {
       .finally(() => setTemplateLoading(false));
   }, [hasHydrated, store.templateId]);
 
-  // State (bukan useRef biasa) supaya effect di bawah otomatis jalan ulang
-  // begitu div kontainer benar-benar ter-mount -- perlu karena divnya baru
-  // muncul setelah kondisi "hasHydrated"/"isDataComplete" terpenuhi, jadi
-  // useRef+useEffect([]) klasik akan lolos duluan saat container masih null.
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
     if (!containerEl) return;
-    // Ukur langsung begitu container ter-mount -- jangan tunggu callback
-    // pertama ResizeObserver, supaya kanvas tetap muncul instan meski RO
-    // baru benar-benar terpicu belakangan saat window di-resize.
     setContainerWidth(containerEl.getBoundingClientRect().width);
 
     const observer = new ResizeObserver((entries) => {
@@ -67,12 +60,6 @@ export default function PreviewClient() {
     return () => observer.disconnect();
   }, [containerEl]);
 
-  // Export kanvas Konva langsung jadi JPEG DI BROWSER (bukan lewat server
-  // /api/generate) -- alternatif yang lebih andal selagi bug font "kotak
-  // tofu" pada render server-side (sharp/librsvg) belum benar-benar tuntas
-  // diperbaiki. Preview ini pakai font asli browser jadi hasilnya selalu
-  // benar, tidak pernah tofu. pixelRatio dihitung supaya output tetap full
-  // resolusi 1080x1920 walau tampilan di layar diperkecil (responsif).
   function handleDownloadJpegFromPreview() {
     const stage = stageRef.current;
     if (!stage || containerWidth <= 0) return;
@@ -82,32 +69,26 @@ export default function PreviewClient() {
       quality: 0.95,
       pixelRatio,
     });
+    const filename = `undangan-${template?.name ?? "preview"}.jpg`;
 
-    // Sengaja dikonversi ke Blob + object URL (bukan langsung pakai data:
-    // URL di atas sebagai href) -- Safari terkenal tidak konsisten
-    // menghormati atribut "download" pada link kalau hrefnya data: URL
-    // (base64): alih-alih menyimpan file, Safari sering malah
-    // membuka/menampilkan gambarnya begitu saja di tab baru. blob: URL jauh
-    // lebih andal dipicu sebagai unduhan lintas browser (Chrome, Firefox,
-    // Safari).
-    const byteString = atob(dataUrl.split(",")[1]);
-    const byteArray = new Uint8Array(byteString.length);
-    for (let i = 0; i < byteString.length; i++) {
-      byteArray[i] = byteString.charCodeAt(i);
-    }
-    const blob = new Blob([byteArray], { type: "image/jpeg" });
-    const blobUrl = URL.createObjectURL(blob);
+    try {
+      const byteString = atob(dataUrl.split(",")[1]);
+      const byteArray = new Uint8Array(byteString.length);
+      for (let i = 0; i < byteString.length; i++) {
+        byteArray[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([byteArray], { type: "image/jpeg" });
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch {}
 
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.download = `undangan-${template?.name ?? "preview"}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    // Revoke sedikit belakangan (bukan langsung) supaya browser (termasuk
-    // Safari) sempat benar-benar memulai proses download sebelum URL-nya
-    // dicabut.
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    setSavedImageUrl(dataUrl);
   }
 
   if (!hasHydrated || templateLoading) {
@@ -206,6 +187,32 @@ export default function PreviewClient() {
           Lanjut ke Generate (server)
         </Link>
       </div>
+
+      {savedImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/80 p-6"
+          onClick={() => setSavedImageUrl(null)}
+        >
+          <p className="max-w-xs text-center text-sm font-medium text-white">
+            Tekan &amp; tahan gambar di bawah ini, lalu pilih &quot;Simpan ke
+            Foto&quot; (iPhone/Safari) -- atau klik kanan lalu &quot;Simpan
+            Gambar&quot; (desktop).
+          </p>
+          <img
+            src={savedImageUrl}
+            alt="Preview undangan untuk disimpan"
+            className="max-h-[70vh] w-auto rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setSavedImageUrl(null)}
+            className="rounded-full bg-white px-6 py-2 text-sm font-semibold text-gray-900"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
     </main>
   );
 }
