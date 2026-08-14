@@ -82,12 +82,32 @@ export default function PreviewClient() {
       quality: 0.95,
       pixelRatio,
     });
+
+    // Sengaja dikonversi ke Blob + object URL (bukan langsung pakai data:
+    // URL di atas sebagai href) -- Safari terkenal tidak konsisten
+    // menghormati atribut "download" pada link kalau hrefnya data: URL
+    // (base64): alih-alih menyimpan file, Safari sering malah
+    // membuka/menampilkan gambarnya begitu saja di tab baru. blob: URL jauh
+    // lebih andal dipicu sebagai unduhan lintas browser (Chrome, Firefox,
+    // Safari).
+    const byteString = atob(dataUrl.split(",")[1]);
+    const byteArray = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) {
+      byteArray[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([byteArray], { type: "image/jpeg" });
+    const blobUrl = URL.createObjectURL(blob);
+
     const link = document.createElement("a");
-    link.href = dataUrl;
+    link.href = blobUrl;
     link.download = `undangan-${template?.name ?? "preview"}.jpg`;
     document.body.appendChild(link);
     link.click();
     link.remove();
+    // Revoke sedikit belakangan (bukan langsung) supaya browser (termasuk
+    // Safari) sempat benar-benar memulai proses download sebelum URL-nya
+    // dicabut.
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   }
 
   if (!hasHydrated || templateLoading) {
