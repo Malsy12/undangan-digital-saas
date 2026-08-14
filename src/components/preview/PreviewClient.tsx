@@ -73,7 +73,7 @@ export default function PreviewClient() {
   // diperbaiki. Preview ini pakai font asli browser jadi hasilnya selalu
   // benar, tidak pernah tofu. pixelRatio dihitung supaya output tetap full
   // resolusi 1080x1920 walau tampilan di layar diperkecil (responsif).
-  function handleDownloadJpegFromPreview() {
+  async function handleDownloadJpegFromPreview() {
     const stage = stageRef.current;
     if (!stage || containerWidth <= 0) return;
     const pixelRatio = CANVAS_WIDTH / containerWidth;
@@ -83,30 +83,46 @@ export default function PreviewClient() {
       pixelRatio,
     });
 
-    // Sengaja dikonversi ke Blob + object URL (bukan langsung pakai data:
-    // URL di atas sebagai href) -- Safari terkenal tidak konsisten
-    // menghormati atribut "download" pada link kalau hrefnya data: URL
-    // (base64): alih-alih menyimpan file, Safari sering malah
-    // membuka/menampilkan gambarnya begitu saja di tab baru. blob: URL jauh
-    // lebih andal dipicu sebagai unduhan lintas browser (Chrome, Firefox,
-    // Safari).
     const byteString = atob(dataUrl.split(",")[1]);
     const byteArray = new Uint8Array(byteString.length);
     for (let i = 0; i < byteString.length; i++) {
       byteArray[i] = byteString.charCodeAt(i);
     }
     const blob = new Blob([byteArray], { type: "image/jpeg" });
-    const blobUrl = URL.createObjectURL(blob);
+    const filename = `undangan-${template?.name ?? "preview"}.jpg`;
 
+    // Di iOS/Safari, trik <a download> + blob URL sering TIDAK memicu apa-apa
+    // sama sekali (browser "diam", tidak ada file tersimpan) -- WebKit
+    // memang punya dukungan atribut "download" yang tidak konsisten,
+    // terutama untuk URL blob hasil canvas. Web Share API dengan file
+    // jauh lebih andal di iOS: memunculkan share sheet native dengan opsi
+    // "Simpan Gambar/Save Image" langsung ke Photos. Dicoba lebih dulu di
+    // sini, baru fallback ke cara <a download> untuk browser yang tidak
+    // mendukung sharing file (kebanyakan desktop Chrome/Firefox/Edge).
+    try {
+      const file = new File([blob], filename, { type: "image/jpeg" });
+      const nav = navigator as Navigator & {
+        canShare?: (data?: ShareData) => boolean;
+      };
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        return;
+      }
+    } catch (err) {
+      // Pengguna membatalkan share sheet -- bukan error, jangan lanjut ke
+      // fallback (kalau lanjut, seolah-olah dobel-trigger unduhan).
+      if (err instanceof Error && err.name === "AbortError") return;
+      // Untuk error lain (mis. browser klaim dukung tapi gagal di praktik),
+      // lanjut saja ke fallback di bawah.
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = blobUrl;
-    link.download = `undangan-${template?.name ?? "preview"}.jpg`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    // Revoke sedikit belakangan (bukan langsung) supaya browser (termasuk
-    // Safari) sempat benar-benar memulai proses download sebelum URL-nya
-    // dicabut.
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   }
 
