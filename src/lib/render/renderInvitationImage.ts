@@ -1,6 +1,7 @@
 import "server-only";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync } from "fs";
 import { join } from "path";
+import { tmpdir } from "os";
 import sharp, { type OverlayOptions, type Sharp } from "sharp";
 import {
   CANVAS_WIDTH,
@@ -13,8 +14,77 @@ import { SUPPORTED_FONTS, resolveFontName } from "@/lib/fonts";
 import type { Template } from "@/lib/templates/types";
 import { wrapText } from "./wrapText";
 
+// FIX BUG "TOFU" FONT (kotak kosong menggantikan teks di gambar hasil):
+//
+// Root cause SEBENARNYA bukan karena font "gagal disematkan" (@font-face di
+// bawah ini sudah benar secara sintaks), tapi karena rasterisasi SVG di
+// `sharp` dilakukan oleh librsvg, dan librsvg TIDAK PERNAH membaca ataupun
+// menerapkan aturan CSS `@font-face` sama sekali -- ini limitasi librsvg itu
+// sendiri, bukan bug versi tertentu. librsvg mencari font murni lewat Pango
+// + fontconfig berdasarkan nama font-family, dan di server serverless
+// (Vercel dkk) tidak ada satupun font terinstall di sistem. Jadi walau file
+// font sudah disematkan base64 di dalam SVG, librsvg tidak akan pernah
+// menemukannya -> semua glyph jatuh ke "notdef" alias kotak tofu.
+//
+// Perbaikan: daftarkan file font kita ke fontconfig lewat env var
+// FONTCONFIG_PATH, supaya Pango/fontconfig ketemu font "Poppins", "Playfair
+// Display", dst saat mencari berdasarkan nama font-family di teks SVG.
+// loadFontFaceStyle()/@font-face di bawah TETAP dibiarkan ada -- tidak
+// berbahaya, cuma tidak dipakai librsvg -- supaya diff minim dan endpoint
+// debug-font-test yang sudah ada tidak ikut rusak.
+//
+// PENTING: FONTCONFIG_PATH harus di-set SEBELUM sharp/librsvg pertama kali
+// dipakai di proses ini, karena fontconfig cuma baca config sekali lalu
+// di-cache sepanjang hidup proses -- makanya ensureFontsRegisteredWithFontconfig()
+// dipanggil di top-level module ini (bukan di dalam renderInvitationImage),
+// supaya jalan paling awal saat cold start, sebelum request pertama masuk.
+const RUNTIME_FONT_DIR = join(tmpdir(), "undangan-digital-fonts");
+const FONTCONFIG_DIR = join(tmpdir(), "undangan-digital-fontconfig");
+
+function ensureFontsRegisteredWithFontconfig(): void {
+  try {
+    const sourceDir = join(process.cwd(), "src/lib/render/fonts");
+
+    if (!existsSync(RUNTIME_FONT_DIR)) mkdirSync(RUNTIME_FONT_DIR, { recursive: true });
+    if (!existsSync(FONTCONFIG_DIR)) mkdirSync(FONTCONFIG_DIR, { recursive: true });
+
+    for (const filename of readdirSync(sourceDir)) {
+      if (!filename.toLowerCase().endsWith(".woff")) continue;
+      const dest = join(RUNTIME_FONT_DIR, filename);
+      if (!existsSync(dest)) {
+        writeFileSync(dest, readFileSync(join(sourceDir, filename)));
+      }
+    }
+
+    const fontsConfPath = join(FONTCONFIG_DIR, "fonts.conf");
+    if (!existsSync(fontsConfPath)) {
+      writeFileSync(
+        fontsConfPath,
+        [
+          '<?xml version="1.0"?>',
+          '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">',
+          "<fontconfig>",
+          `  <dir>${RUNTIME_FONT_DIR}</dir>`,
+          `  <cachedir>${join(FONTCONFIG_DIR, "cache")}</cachedir>`,
+          "</fontconfig>",
+          "",
+        ].join("\n")
+      );
+    }
+
+    process.env.FONTCONFIG_PATH = FONTCONFIG_DIR;
+  } catch (err) {
+    // Jangan sampai generate API 500 total gara-gara setup fontconfig gagal
+    // -- biarkan lanjut (hasil balik ke tofu seperti sebelumnya) sambil
+    // dicatat di log server untuk investigasi lebih lanjut.
+    console.error("[renderInvitationImage] Gagal setup fontconfig runtime:", err);
+  }
+}
+
+ensureFontsRegisteredWithFontconfig();
+
 // Server serverless (Vercel dkk) TIDAK punya font sistem terinstall (beda
-// dengan komputer dev yang punya Arial/dsb) — tanpa font disematkan langsung,
+// dengan komputer dev yang punya Arial/dsb) -- tanpa font disematkan langsung,
 // semua teks di gambar hasil generate akan tampil sebagai kotak kosong
 // ("tofu"). Cuma font yang benar-benar dipakai template yang disematkan
 // (bukan semua font pilihan sekaligus), hasilnya di-cache per nama font
@@ -114,7 +184,7 @@ function hexToRgb01(hex: string): [number, number, number] {
 
 /**
  * Bayangan frame foto dirender sebagai SVG terpisah (feGaussianBlur + feOffset +
- * feColorMatrix — bukan feDropShadow supaya kompatibel lebih luas di librsvg),
+ * feColorMatrix -- bukan feDropShadow supaya kompatibel lebih luas di librsvg),
  * dikomposit SEBELUM foto supaya cuma bagian yang meluber di luar frame yang
  * kelihatan (bagian tengahnya ketutup total oleh foto di atasnya).
  */
@@ -127,21 +197,21 @@ function buildPhotoShadowSvg(placeholder: PhotoPlaceholder, shadow: PhotoShadow)
   const [r, g, b] = hexToRgb01(shadow.color);
 
   return `
-    <svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <filter id="photoShadow" x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="${shadow.blur / 2}" result="blur"/>
-          <feOffset in="blur" dx="${shadow.offsetX}" dy="${shadow.offsetY}" result="offsetBlur"/>
-          <feColorMatrix in="offsetBlur" type="matrix" values="
-            0 0 0 0 ${r}
-            0 0 0 0 ${g}
-            0 0 0 0 ${b}
-            0 0 0 ${shadow.opacity} 0"/>
-        </filter>
-      </defs>
-      <g filter="url(#photoShadow)">${shapeEl}</g>
-    </svg>
-  `;
+<svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="photoShadow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="${shadow.blur / 2}" result="blur"/>
+      <feOffset in="blur" dx="${shadow.offsetX}" dy="${shadow.offsetY}" result="offsetBlur"/>
+      <feColorMatrix in="offsetBlur" type="matrix" values="
+        0 0 0 0 ${r}
+        0 0 0 0 ${g}
+        0 0 0 0 ${b}
+        0 0 0 ${shadow.opacity} 0"/>
+    </filter>
+  </defs>
+  <g filter="url(#photoShadow)">${shapeEl}</g>
+</svg>
+`;
 }
 
 async function fetchImageBuffer(url: string): Promise<Buffer> {
@@ -153,7 +223,7 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
 /**
  * Render satu TextLayer jadi elemen <text> SVG. Kalau "lines" diberikan
  * langsung (mis. tanggal, sudah dipisah per baris oleh pemanggil), tidak
- * di-word-wrap lagi — cuma dipakai apa adanya (baris pendek yang sudah pasti muat).
+ * di-word-wrap lagi -- cuma dipakai apa adanya (baris pendek yang sudah pasti muat).
  */
 function textLayerToSvg(
   text: string,
@@ -170,14 +240,14 @@ function textLayerToSvg(
     layer.align === "center"
       ? "middle"
       : layer.align === "right"
-        ? "end"
-        : "start";
+      ? "end"
+      : "start";
   const x =
     layer.align === "center"
       ? layer.x + layer.width / 2
       : layer.align === "right"
-        ? layer.x + layer.width
-        : layer.x;
+      ? layer.x + layer.width
+      : layer.x;
 
   const fontWeight = layer.fontStyle?.includes("bold") ? "bold" : "normal";
   const fontStyleAttr = layer.fontStyle?.includes("italic")
@@ -194,7 +264,7 @@ function textLayerToSvg(
     .join("");
 
   // resolveFontName menjamin nama yang dipakai di sini SAMA dengan nama yang
-  // disematkan loadFontFaceStyle — kalau beda, browser/librsvg tidak akan
+  // disematkan loadFontFaceStyle -- kalau beda, browser/librsvg tidak akan
   // ketemu face-nya dan render text jadi tofu lagi (lihat riwayat bug font).
   const resolvedFontFamily = resolveFontName(fontFamily);
   return `<text font-family="${escapeXml(resolvedFontFamily)}, Arial, Helvetica, sans-serif" font-size="${layer.fontSize}" font-weight="${fontWeight}" font-style="${fontStyleAttr}" fill="${fill}" text-anchor="${anchor}">${tspans}</text>`;
@@ -202,8 +272,8 @@ function textLayerToSvg(
 
 /**
  * Render satu undangan jadi buffer JPEG final (1080x1920, quality 95).
- * Semua posisi diambil dari template.layout — sumber yang sama dipakai
- * preview Konva (Tahap 4/6) — supaya hasil akhir konsisten dengan yang
+ * Semua posisi diambil dari template.layout -- sumber yang sama dipakai
+ * preview Konva (Tahap 4/6) -- supaya hasil akhir konsisten dengan yang
  * dilihat customer & admin sebelum generate/publish.
  */
 export async function renderInvitationImage({
@@ -219,11 +289,11 @@ export async function renderInvitationImage({
   // 1) Background: pakai background_url asli kalau sudah diupload admin,
   // else solid dominantColor. Label kategori dirasterisasi jadi satu lapisan.
   const kategoriSvg = `
-    <svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <defs>${fontFaceStyle}</defs>
-      ${textLayerToSvg(template.category.toUpperCase(), layout.textLayers.kategori, template.fontName, "#ffffff")}
-    </svg>
-  `;
+<svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <defs>${fontFaceStyle}</defs>
+  ${textLayerToSvg(template.category.toUpperCase(), layout.textLayers.kategori, template.fontName, "#ffffff")}
+</svg>
+`;
 
   let base: Sharp;
   if (template.backgroundUrl) {
@@ -283,7 +353,7 @@ export async function renderInvitationImage({
     overlays.push({ input: resizedOverlay, left: 0, top: 0 });
   }
 
-  // 4) Logo opsional — ditempel apa adanya, tanpa masking.
+  // 4) Logo opsional -- ditempel apa adanya, tanpa masking.
   if (logoBuffer) {
     const { x: logoX, y: logoY, size } = layout.logoPlaceholder;
     const resizedLogo = await sharp(logoBuffer)
@@ -300,35 +370,35 @@ export async function renderInvitationImage({
   // 5) Semua teks data (nama, ortu, tanggal, alamat, ucapan, doa) dalam satu
   // lapisan SVG transparan, dikomposit paling atas.
   const textSvg = `
-    <svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <defs>${fontFaceStyle}</defs>
-      ${textLayerToSvg(formData.namaAnak || "Nama Anak", layout.textLayers.namaAnak, template.fontName, template.fontColor)}
-      ${textLayerToSvg(
-        `${sebutan} dari Bapak ${formData.namaAyah || "-"} & Ibu ${formData.namaIbu || "-"}`,
-        layout.textLayers.orangTua,
-        template.fontName,
-        template.fontColor
-      )}
-      ${textLayerToSvg("", layout.textLayers.tanggal, template.fontName, template.fontColor, [
-        `Lahir: ${formatTanggal(formData.tanggalLahir)}`,
-        `Acara: ${formatTanggal(formData.tanggalPelaksanaan)}`,
-      ])}
-      ${textLayerToSvg(formData.alamat || "-", layout.textLayers.alamat, template.fontName, template.fontColor)}
-      ${textLayerToSvg(formData.ucapan || "-", layout.textLayers.ucapan, template.fontName, template.fontColor)}
-      ${textLayerToSvg(formData.doa || "-", layout.textLayers.doa, template.fontName, template.fontColor)}
-      ${
-        formData.namaKeluarga
-          ? textLayerToSvg(
-              "",
-              layout.textLayers.keluarga,
-              template.fontName,
-              template.fontColor,
-              ["Kami yang berbahagia,", formData.namaKeluarga]
-            )
-          : ""
-      }
-    </svg>
-  `;
+<svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <defs>${fontFaceStyle}</defs>
+  ${textLayerToSvg(formData.namaAnak || "Nama Anak", layout.textLayers.namaAnak, template.fontName, template.fontColor)}
+  ${textLayerToSvg(
+    `${sebutan} dari Bapak ${formData.namaAyah || "-"} & Ibu ${formData.namaIbu || "-"}`,
+    layout.textLayers.orangTua,
+    template.fontName,
+    template.fontColor
+  )}
+  ${textLayerToSvg("", layout.textLayers.tanggal, template.fontName, template.fontColor, [
+    `Lahir: ${formatTanggal(formData.tanggalLahir)}`,
+    `Acara: ${formatTanggal(formData.tanggalPelaksanaan)}`,
+  ])}
+  ${textLayerToSvg(formData.alamat || "-", layout.textLayers.alamat, template.fontName, template.fontColor)}
+  ${textLayerToSvg(formData.ucapan || "-", layout.textLayers.ucapan, template.fontName, template.fontColor)}
+  ${textLayerToSvg(formData.doa || "-", layout.textLayers.doa, template.fontName, template.fontColor)}
+  ${
+    formData.namaKeluarga
+      ? textLayerToSvg(
+          "",
+          layout.textLayers.keluarga,
+          template.fontName,
+          template.fontColor,
+          ["Kami yang berbahagia,", formData.namaKeluarga]
+        )
+      : ""
+  }
+</svg>
+`;
   overlays.push({ input: Buffer.from(textSvg), left: 0, top: 0 });
 
   return base.composite(overlays).jpeg({ quality: 95 }).toBuffer();
