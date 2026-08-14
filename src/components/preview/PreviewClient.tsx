@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import type Konva from "konva";
 import { useInvitationStore } from "@/lib/store/useInvitationStore";
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "@/lib/template-layout";
 import type { Template } from "@/lib/templates/types";
 
-// Konva butuh <canvas> browser API — tidak boleh ikut di-render di server.
+// Konva butuh <canvas> browser API -- tidak boleh ikut di-render di server.
 const InvitationCanvasStage = dynamic(
   () => import("./InvitationCanvasStage"),
   {
@@ -29,6 +30,7 @@ export default function PreviewClient() {
 
   const [template, setTemplate] = useState<Template | null>(null);
   const [templateLoading, setTemplateLoading] = useState(true);
+  const stageRef = useRef<Konva.Stage>(null);
 
   // Komponen ini client-only (data dari localStorage), jadi tema diambil
   // lewat API route publik /api/templates/[id], bukan query Supabase langsung.
@@ -45,7 +47,7 @@ export default function PreviewClient() {
   }, [hasHydrated, store.templateId]);
 
   // State (bukan useRef biasa) supaya effect di bawah otomatis jalan ulang
-  // begitu div kontainer benar-benar ter-mount — perlu karena divnya baru
+  // begitu div kontainer benar-benar ter-mount -- perlu karena divnya baru
   // muncul setelah kondisi "hasHydrated"/"isDataComplete" terpenuhi, jadi
   // useRef+useEffect([]) klasik akan lolos duluan saat container masih null.
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
@@ -53,7 +55,7 @@ export default function PreviewClient() {
 
   useEffect(() => {
     if (!containerEl) return;
-    // Ukur langsung begitu container ter-mount — jangan tunggu callback
+    // Ukur langsung begitu container ter-mount -- jangan tunggu callback
     // pertama ResizeObserver, supaya kanvas tetap muncul instan meski RO
     // baru benar-benar terpicu belakangan saat window di-resize.
     setContainerWidth(containerEl.getBoundingClientRect().width);
@@ -64,6 +66,29 @@ export default function PreviewClient() {
     observer.observe(containerEl);
     return () => observer.disconnect();
   }, [containerEl]);
+
+  // Export kanvas Konva langsung jadi JPEG DI BROWSER (bukan lewat server
+  // /api/generate) -- alternatif yang lebih andal selagi bug font "kotak
+  // tofu" pada render server-side (sharp/librsvg) belum benar-benar tuntas
+  // diperbaiki. Preview ini pakai font asli browser jadi hasilnya selalu
+  // benar, tidak pernah tofu. pixelRatio dihitung supaya output tetap full
+  // resolusi 1080x1920 walau tampilan di layar diperkecil (responsif).
+  function handleDownloadJpegFromPreview() {
+    const stage = stageRef.current;
+    if (!stage || containerWidth <= 0) return;
+    const pixelRatio = CANVAS_WIDTH / containerWidth;
+    const dataUrl = stage.toDataURL({
+      mimeType: "image/jpeg",
+      quality: 0.95,
+      pixelRatio,
+    });
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `undangan-${template?.name ?? "preview"}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
 
   if (!hasHydrated || templateLoading) {
     return (
@@ -113,6 +138,7 @@ export default function PreviewClient() {
       <div ref={setContainerEl} className="w-full">
         {containerWidth > 0 && (
           <InvitationCanvasStage
+            ref={stageRef}
             template={template}
             formData={{
               namaAnak: store.namaAnak,
@@ -138,7 +164,15 @@ export default function PreviewClient() {
         tidak keluar dari frame.
       </p>
 
-      <div className="mt-6 flex gap-3">
+      <button
+        type="button"
+        onClick={handleDownloadJpegFromPreview}
+        className="mt-6 w-full rounded-full bg-brand-600 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-brand-600/30 hover:bg-brand-700"
+      >
+        Download JPEG dari Preview Ini
+      </button>
+
+      <div className="mt-3 flex gap-3">
         <Link
           href={`/form?template=${template.id}`}
           className="flex-1 rounded-full border border-gray-300 py-3 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -147,9 +181,9 @@ export default function PreviewClient() {
         </Link>
         <Link
           href="/result"
-          className="flex-1 rounded-full bg-brand-600 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-brand-600/30 hover:bg-brand-700"
+          className="flex-1 rounded-full border border-gray-300 py-3 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50"
         >
-          Lanjut ke Generate
+          Lanjut ke Generate (server)
         </Link>
       </div>
     </main>
